@@ -1263,14 +1263,14 @@ try {
 要让编译器这样做，就要给 `lock()` 函数加上 `inline` 修饰符：
 
 ```kotlin
-    lock.lock()
+inline fun <T> lock(lock: Lock, body: () -> T): T {
+  	lock.lock()
     try {
         return body()
     } finally {
         lock.unlock()
     }
-}
-
+}    
 // 使用示例
 val result = lock(myLock) {
     // ... 执行一些操作
