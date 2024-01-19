@@ -1376,15 +1376,21 @@ fun main() {
 注意，一些内联函数可能不是直接从函数体调用作为参数传递给它们的 `lambda`，而是从另一个执行上下文，如本地对象或嵌套函数。在这种情况下，`lambda` 中也不允许非局部控制流。为了指示内联函数的 `lambda` 参数不能使用非局部返回，用 `crossinline` 修饰符标记 `lambda` 参数：
 
 ```kotlin
-inline fun f(crossinline body: () -> Unit) {
-    val f = object: Runnable {
-        override fun run() = body() //这里的body不允许使用非局部返回
+inline fun inlineFunction(crossinline lambda: () -> Unit) {
+    val localFunction = object {
+        fun run() {
+            lambda() // lambda 被调用的地方不是直接在 inlineFunction 的函数体中
+        }
     }
-    // ...
+    localFunction.run()
 }
-//使用示例
-f {
-  	//...执行一些操作，但不能包含return@f这样的非局部返回
+
+fun main() {
+    inlineFunction {
+        // 这里不能使用非局部返回，因为 lambda 被标记为 crossinline
+        println("This will be printed.")
+        // return  // 这将引发编译错误，因为使用了 crossinline
+    }
 }
 ```
 
