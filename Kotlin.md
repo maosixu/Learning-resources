@@ -1281,6 +1281,13 @@ val result = lock(myLock) {
 
 虽然内联可能会让生成的代码变大。但是，如果你能合理地使用它（避免对大函数进行内联），它会在性能上带来回报，尤其是在循环中的 `"megamorphic"` 调用位置。
 
+性能提升的几种情况：
+
+1. **小函数的频繁调用**: 对于小的函数，如果它们被频繁调用，内联可以消除函数调用的开销，因为函数体的代码直接替换了调用点，避免了函数调用栈的额外操作。
+2. **高阶函数与 lambda 表达式**: 在 `Kotlin` 中，高阶函数是可以接受函数作为参数或返回函数的函数。如果一个高阶函数被内联，那么传递给它的 `lambda` 表达式也会被内联，这样就可以避免创建 `lambda` 表达式的实例，**减少内存分配和垃圾回收的压力**。
+3. **循环中的函数调用**: 在循环结构中，对函数的重复调用可能会导致性能瓶颈。如果循环体内的函数调用被内联，可以**减少函数调用的开销，提高循环的执行效率**。
+4. **"Megamorphic" 调用位置**: "Megamorphic" 调用是指在程序中，一个方法调用的目标不是单一的，而是有很多种可能的目标。这种情况下，虚拟机优化起来比较困难，因为它难以确定哪个方法会被实际调用。内联函数可以在编译时确定调用的具体方法，从而提高这种情况下的性能。
+
 ### noinline修饰符
 
 如果你不想让所有传给 `inline` 函数的 `lambda` 表达式都被嵌入，那就在你的一些函数参数上加上 `noinline` 修饰符：
@@ -1292,6 +1299,30 @@ inline fun foo(inlined: () -> Unit, noinline notInlined: () -> Unit) { ... }
 只有在 `inline` 函数中或作为可内联参数的情况下，才能调用可内联的 `lambda `表达式。但是，对于 `noinline` 的 `lambda` 表达式，你可以随心所欲地操作它们，包括将它们存储在字段中或者传递。
 
 > 如果一个 `inline` 函数既没有可内联的函数参数，也没有实化的类型参数，编译器会发出警告，因为这种情况下的函数内联很可能无法带来任何益处（如果你确信这个函数需要内联，你可以使用 `@Suppress("NOTHING_TO_INLINE")` 注解来消除这个警告）。
+
+例子：
+
+```kotlin
+// 这是一个内联函数，它接受两个 lambda 表达式作为参数
+inline fun inlineFunction(
+    inlineLambda: () -> Unit, // 这个 lambda 会被内联
+    noinline noinlineLambda: () -> Unit // 这个 lambda 不会被内联
+) {
+    inlineLambda() // 这个调用会被内联
+    noinlineLambda() // 这个调用不会被内联，而是正常调用
+    // noinlineLambda 可以像普通对象一样被处理
+    val lambdaReference = noinlineLambda
+    lambdaReference() // 这里使用了 lambda 的引用来调用
+}
+
+fun main() {
+    // 调用内联函数，并传递两个 lambda 表达式
+    inlineFunction(
+        inlineLambda = { println("1") },
+        noinlineLambda = { println("1") }
+    )
+}
+```
 
 ### 非局部返回 
 
@@ -1314,11 +1345,11 @@ fun main() {
 但是，如果把 `lambda` 传递给的函数进行了内联处理，`return` 也可以进行内联处理。因此，这是被允许的：
 
 ```kotlin
-fun ordinaryFunction(block: () -> Unit) {
+inline fun ordinaryFunction(block: () -> Unit) {
     println("hi!")
 }
 fun foo() {
-    inline {
+    ordinaryFunction {
         return // OK: the lambda is inlined
     }
 }
@@ -1327,7 +1358,7 @@ fun main() {
 }
 ```
 
-这种在 `lambda` 中但退出封闭函数的返回被称为非局部返回。这种情况通常在循环中出现，而这些循环经常包含内联函数：
+这种在 `lambda` 中退出封闭函数的返回被称为非局部返回。这种情况通常在循环中出现，而这些循环经常包含内联函数：
 
 ```kotlin
 fun hasZeros(ints: List<Int>): Boolean {
@@ -1335,6 +1366,10 @@ fun hasZeros(ints: List<Int>): Boolean {
       if (it == 0) return true
     }
   return false
+}
+fun main() {
+    val numbers = asList(1,2,0,3,4)
+    println(hasZeros(numbers))  //true
 }
 ```
 
