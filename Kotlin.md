@@ -1486,7 +1486,9 @@ inline var bar: Bar
 
 # 五、类
 
-`Kotlin` 支持面向对象编程，可以创建类和对象。如果要定义一个类，就使用 `class` 关键字：
+`Kotlin` 支持面向对象编程，可以创建类和对象。一个类的声明包括类名、类头部（包括类型参数、主构造函数等信息）以及用大括号括起来的类体。类头部和类体都是可选的，如果一个类没有类体，那么大括号可以省略。
+
+如果要定义一个类，就使用 `class` 关键字：
 
 ```kotlin
 class Customer
@@ -1576,7 +1578,7 @@ fun main() {
 // Second initializer block that prints 5
 ```
 
-你也可以在类体中声明的属性初始化器中使用这些参数：
+你也可以在类体中使用这些参数：
 
 ```kotlin
 class Customer(name: String) {
@@ -1646,9 +1648,13 @@ class DontCreateMe private constructor() { /*...*/ }
 
 在 JVM 中，如果主构造函数的所有参数都设定了默认值，编译器就会生成一个附加的无参数构造函数，这个构造函数会使用这些默认值。这样做是为了方便在使用如 `Jackson` 或 `JPA` 这类通过无参数构造函数创建类实例的库时，能更轻松地使用 `Kotlin`。
 
-## 5.2 属性访问
+## 5.2 属性
 
-在实例名后面加上一个点，然后再写上属性名：
+### 5.2.1 属性定义
+
+在 Kotlin 类中，我们可以使用 `var` 关键字来定义可以改变的特性，或者使用 `val` 关键字来定义只能读取的特性。
+
+如果你想访问某个属性，在实例名后面加上一个点，然后再写上属性名：
 
 ```kotlin
 class Contact(val id: Int, var email: String)
@@ -1665,6 +1671,168 @@ fun main() {
     // jane@gmail.com
 }
 ```
+
+### 5.2.2 Getter和setter方法
+
+如果你想声明一个属性，完整的语法规则如下：
+
+```kotlin
+var <propertyName>[: <PropertyType>] [= <property_initializer>]
+    [<getter>]
+    [<setter>]
+```
+
+初始化器、获取器和设置器都是可选的。如果可以从初始化器或获取器的返回类型中推断出属性类型，那么属性类型也是可选的，如下所示：
+
+```kotlin
+val initialized = 1	//类型为Int，有默认的获取器和设置器
+var allByDefault //需要明确指定初始化器，因为这里默认就包含了取值和赋值函数
+```
+
+声明一个只读属性和声明一个可变属性的完全语法有两点不同：首先，只读属性的声明以 val 开始，而不是 var；其次，只读属性不允许有赋值函数：
+
+```kotlin
+val simple: Int? //类型为Int，默认有获取器,必须在构造器中进行赋初值操作
+val inferredType = 1	//类型为Int，默认有获取器
+```
+
+你可以为一个属性设置自定义的访问器。如果你设置了一个自定义的 `getter`，那么每次访问这个属性时，这个 `getter` 都会被调用（这样你就可以实现一个动态计算的属性）。下面是一个自定义 `getter` 的例子：
+
+```kotlin
+class Rectangle(val width: Int, val height: Int) {
+  	val area: Int
+  			get() = this.width * this.height
+}
+
+fun main() {
+  	var rectangle = Rectangle(3, 4)
+  	println("Width=${rectangle.width},height=${rectangle.height},area=${rectangle.area}")
+}
+```
+
+如果可以从getter中推断出类型，那么就可以忽略属性类型
+
+```kotlin
+val area get() = this.width * this.height
+```
+
+如果你设置了一个自定义的 `setter`，那么除了在初始化属性时，每次给属性赋值都会调用这个 `setter`。一个自定义 `setter` 的示例如下：
+
+```kotlin
+var stringRepresentation: String
+		get() = this.toString()
+		set(value) {
+      	setDataFromString(value)	//分析字符串并把值分配给其他的属性
+    }
+```
+
+通常来说，我们把 `setter` 的参数命名为 `value`，但如果你有其他偏好，也可以选择一个不同的名字。
+
+如果你需要给访问器添加注释或改变它的可见性，但又不想改变它的默认实现方式，你可以只定义访问器而不定义它的具体内容：
+
+```kotlin
+var setterVisibility: String = "abc"
+		private set	//这个 setter 是私有的，并且采用了默认的实现方式
+
+var setterWithAnnotation: Any? = null
+		@Inject set	//用 Inject 来标记这个 setter
+```
+
+#### 备用字段
+
+在 `Kotlin` 编程语言中，字段只是作为属性的一部分，用来在内存中储存其值，我们不能直接声明字段。但是，当一个属性需要一个备用字段时，`Kotlin` 会自动提供。这个备用字段可以在访问器中通过 `field` 标识符进行引用。
+
+```kotlin
+var count = 0
+		set(value) {
+      	if(value > 0) {
+          	filed = value
+          // counter = value // 错误 StackOverflow：使用实际名称 'counter' 会使设置器递归
+        }
+    }
+```
+
+字段标识符只能在属性的访问器中被使用。
+
+如果一个属性至少使用了一个访问器的默认实现，或者自定义的访问器通过字段标识符引用了它，那么就会为这个属性生成一个备用字段。
+
+比如说，下面这种情况就不会生成备用字段：
+
+```kotlin
+val isEmpty: Boolean
+    get() = this.size == 0
+```
+
+#### 备用属性
+
+如果你想做的事情不适应这种隐式的备用字段方案，你可以随时选择使用备用属性：
+
+```kotlin
+private var _table: Map<String, Int?> = null
+public val table: Map<String, Int>
+		get() {
+      	if(_table == null) {
+          	_table = HashMap()
+        }
+      	return _table?:throw AssertionError("Set to null by anthor thread")
+    }
+```
+
+### 5.2.3 编译时常量
+
+如果一个只读属性的值在编译阶段就能确定，就可以用 `const` 关键字把它标记为编译时常量。这类属性需要满足以下几个条件：
+
+* 它必须是顶层属性，或者是对象声明或伴生对象的成员。
+
+* 它的初始化值必须是 `String` 类型或者基本类型的值
+
+* 它不能有自定义的 `getter`
+
+编译器会把这种常量的使用进行内联处理，也就是说，会把引用这个常量的地方替换为常量的实际值。但是，这个字段本身不会被移除，所以还可以通过反射来与它进行交互。
+
+这种属性也可以用于注解：
+
+```kotlin
+const val SUBSYSTEM_DEPRECATED: String = "This subsystem is deprecated"
+
+@Deprecated(SUBSYSTEM_DEPRECATED) fun foo() { ... }
+```
+
+### 5.2.4 延迟初始化的属性和变量
+
+一般来说，被声明为非空类型的属性必须在构造函数中进行初始化。然而，这样做往往并不便利。比如，属性可以通过依赖注入或者在单元测试的准备方法中进行初始化。在这种情况下，你无法在构造函数中提供一个非空的初始化器，但你仍然希望在类体内引用属性时能避免空值检查。
+
+为了应对这种情况，你可以使用 `lateinit` 修饰符来标记属性。
+
+```kotlin
+public class MyTest {
+  	lateinit var subject: TestSubject
+  
+  	@SetUp fun setup() {
+      	subject = TestSubject()
+    }
+  	
+  	@Test fun test() {
+      	subject.method()	//直接访问引用的内容
+    }
+}
+```
+
+这个修饰符可以应用在类体内部声明的 `var` 属性（不在主要的构造函数中，并且只有当属性没有自定义的 getter 或 setter 时），以及顶级属性和局部变量。**这个属性或变量的类型必须是非空的，并且它不能是基本类型**。
+
+在初始化之前访问一个带有 `lateinit` 修饰符的属性会抛出一个特别的异常，这个异常清楚地标识出你正在访问的属性以及它还没有被初始化的事实。
+
+#### 查看一个带有 lateinit 修饰符的变量是否已经被初始化
+
+如果你想查看一个带有 `lateinit` 修饰符的变量是否已经初始化，你可以在对该属性的引用上使用 `.isInitialized`：
+
+```kotlin
+if (foo::bar.isInitialized) {
+    println(foo.bar)
+}
+```
+
+这种检查只能用于在同一类中、在外部类检查内部类中或在同一文件的顶层声明的属性，这些属性在词法上都是可访问的。
 
 ## 5.3 成员方法
 
@@ -1686,7 +1854,214 @@ fun main() {
 }
 ```
 
-## 5.4 内嵌类和内部类
+## 5.4 继承
+
+在Kotlin中，所有的类都有一个共同的父类，即`Any`。如果一个类没有声明任何超类型，那么它的默认父类就是`Any`：
+
+```kotlin
+class Example // 默认继承自Any
+```
+
+Any 拥有三个方法：`equals()`，`hashCode()`，和 `toString()`。这意味着这些方法在所有 Kotlin 类中都是可以使用的。
+
+在 `Kotlin` 中，类默认是 `final` 类型的，也就是说它们不能被继承。如果你想让一个类可以被继承，你需要使用 `open` 关键字来标记它：
+
+```kotlin
+open class Base // 这个类可以被继承
+```
+
+如果你想声明一个明确的超类，你需要在类的定义部分的冒号后面写上这个超类的类型：
+
+```kotlin
+open class Base(p: Int)
+
+class Derived(p: Int): Base(p)
+```
+
+如果子类有一个主要构造器，那么基类可以（也必须）根据其参数在这个主要构造器中进行初始化。
+
+如果子类没有主要构造器，那么每个次级构造器必须使用 super 关键字来初始化基类，或者它必须委托给另一个可以进行这种初始化的构造器。注意，在这种情况下，不同的次级构造器可以调用基类的不同构造函数：
+
+```kotlin
+class MyView : View {
+    constructor(ctx: Context) : super(ctx)
+
+    constructor(ctx: Context, attrs: AttributeSet) : super(ctx, attrs)
+}
+```
+
+### 5.4.1 重写方法
+
+在kotlin中，如果你想覆盖成员或者进行覆盖操作，你必须明确地使用修饰符`overrides`
+
+```kotlin
+open class Shape {
+    open fun draw() { /*...*/ }
+    fun fill() { /*...*/ }
+}
+
+class Circle() : Shape() {
+    override fun draw() { /*...*/ }
+}
+```
+
+`Circle.draw()` 方法必须使用 `override` 修饰符。如果没有这个修饰符，编译器会报错。如果一个函数，比如 `Shape.fill()`，没有使用 `open` 修饰符，那么在子类中定义一个具有相同签名的方法是不允许的，无论你是否使用了 `override`。对于 `final` 类（即不能被继承的类），`open` 修饰符是无效的。
+
+一个使用了 `override` 修饰符的成员默认也是 `open` 的，也就是说它可以在子类中被重写。如果你不希望它被再次重写，你可以使用 `final`：
+
+```kotlin
+open class Rectangle() : Shape() {
+    final override fun draw() { /*...*/ }
+}
+```
+
+### 5.4.2 重写属性
+
+属性的覆盖机制和方法的覆盖机制是一样的。在父类中声明的属性如果要在子类中重新声明，就必须使用 `override` 标记，并且它们的类型必须相容。每个声明的属性都可以被一个带有初始化值或者带有 `get` 方法的属性所覆盖：
+
+```kotlin
+open class Shape {
+    open val vertexCount: Int = 0
+}
+
+class Rectangle : Shape() {
+    override val vertexCount = 4
+}
+```
+
+你可以使用 `var` 属性来覆盖 `val` 属性，但是反过来则不行。这是因为 `val`（只读）属性本质上声明了一个 `get` 方法，而没有 `set` 方法。在子类中用 `var`（可变）属性覆盖 `val` 属性时，是在添加额外的功能（即 `set` 方法），允许更改属性的值。这是向后兼容的。
+
+反过来，如果用 `val` 属性覆盖 `var` 属性，这将是不允许的。原因是 `var` 属性声明了 `get` 和 `set` 方法，而 `val` 只声明了 `get` 方法。用 `val` 覆盖 `var` 将会移除 `set` 方法，这破坏了父类定义的契约。
+
+需要注意的是，你可以在主构造器中的属性声明部分使用 `override` 关键字：
+
+```kotlin
+interface Shape {
+    val vertexCount: Int
+}
+
+class Rectangle(override val vertexCount: Int = 4) : Shape // Always has 4 vertices
+
+class Polygon : Shape {
+    override var vertexCount: Int = 0  // Can be set to any number later
+}
+```
+
+### 5.4.3 派生类的初始化顺序
+
+在创建一个新的派生类实例时，基类的初始化是首要步骤（只在评估基类构造函数的参数之后进行），这意味着在派生类的初始化逻辑执行之前，基类的初始化就已经完成了。
+
+```kotlin
+open class Base(val name: String) {
+
+    init { println("Initializing a base class") }
+
+    open val size: Int = 
+        name.length.also { println("Initializing size in the base class: $it") }
+}
+
+class Derived(
+    name: String,
+    val lastName: String,
+) : Base(name.replaceFirstChar { it.uppercase() }.also { println("Argument for the base class: $it") }) {
+
+    init { println("Initializing a derived class") }
+
+    override val size: Int =
+        (super.size + lastName.length).also { println("Initializing size in the derived class: $it") }
+}
+
+fun main() {
+    println("Constructing the derived class(\"hello\", \"world\")")
+    Derived("hello", "world")
+}
+```
+
+这意味着当基类构造函数执行时，派生类中声明或重写的属性还未被初始化。在基类初始化逻辑中使用这些属性（无论是直接使用，还是间接通过另一个重写的开放成员实现）可能导致行为错误或运行时崩溃。因此，在设计基类时，你应该避免在构造函数、属性初始化器或初始化块中使用开放成员。
+
+### 5.4.4 调用超类实现
+
+在派生类中，可以通过 `super` 关键字来调用其父类的函数和属性访问器实现：
+
+```kotlin
+open class Rectangle {
+  	open fun draw() {
+      	println("Drawing a rectangle")
+    }
+  
+  	val borderColor: String get() = "blank"
+}
+
+class FilledRectangle: Rectangle() {
+  	override fun draw(){
+      	super.draw()
+      	println("Filling the rectangle")
+    }
+  	
+  	val fillColor: String get() = super.borderColor
+}
+```
+
+在内部类中，如果要访问外部类的父类，需要用到 `super` 关键字，并且要带上外部类的名称，就像这样：`super@Outer`：
+
+```kotlin
+open class Rectangle {
+  	open fun draw() {
+      	println("Drawing a rectangle")
+    }
+  
+  	val borderColor: String get() = "black"
+}
+
+class FilledRectangle: Rectangle() {
+  	override fun draw(){
+      	val filler = Filler()
+      	filler.drawAndFill()
+    }
+  
+  	inner class Filler {
+      	fun fill() { println("Filling") }
+      	fun drawAndFill() {
+          	super@FilledRectangle.draw()	//调用Rectangle的draw()实现
+          	fill()
+          	println("Drawn a filled rectangle with color ${super@FilledRectangle.borderColor}") //调用 Rectangle 中 borderColor 属性的 get() 方法。
+        }
+    }
+}
+
+fun main() {
+  	val fr = FilledRectangle()
+  	fr.draw()
+}
+```
+
+### 5.4.5 重写规则
+
+在 `Kotlin` 编程语言中，实现继承有以下规则：如果一个类从其直接父类中继承了同一个成员的多种实现方式，那么这个类必须重写这个成员，并提供自己的实现方式（可能会使用继承下来的某一种实现方式）。
+
+如果你想指定从哪个父类型中继承实现，你可以使用尖括号中带有父类型名称的 `super`，比如 `super<Base>`：
+
+```kotlin
+open class Rectangle {
+    open fun draw() { /* ... */ }
+}
+
+interface Polygon {
+    fun draw() { /* ... */ } // 接口中的成员默认都是开放的
+}
+
+class Square() : Rectangle(), Polygon {
+    // 编译器需要你重写 draw() 方法:
+    override fun draw() {
+        super<Rectangle>.draw() // 调用 Rectangle的draw()方法
+        super<Polygon>.draw() // 调用 Polygon的draw()方法
+    }
+}
+```
+
+虽然你可以同时从 `Rectangle` 和 `Polygon` 这两个类继承，但是因为它们都有各自的 `draw()` 方法，所以为了避免混淆，你需要在 `Square` 类中重新定义 `draw()` 方法，并提供一个独立的实现。
+
+## 5.5 内嵌类和内部类
 
 类可以被嵌套在另一个类里：
 
